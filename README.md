@@ -1,3 +1,4 @@
+
 # Holiday Gap Detector
 
 Generic tool for comparing official government holiday datasets with the Python `holidays` library.
