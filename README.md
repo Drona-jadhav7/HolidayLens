@@ -1,5 +1,5 @@
 
-# Holiday Gap Detector
+# HolidayLens
 
 Generic tool for comparing official government holiday datasets with the Python `holidays` library.
 
@@ -14,9 +14,9 @@ pip install -e ".[dev]"
 ## Run
 
 ```bash
-holiday-gap compare --country IN --subdiv MH --year 2026 --official data/india/mh/2026.csv
-holiday-gap compare --country IN --subdiv PB --year 2026 --official data/india/pb/2026.csv
-holiday-gap compare --country IN --subdiv TG --year 2026 --official data/india/tg/2026.csv
+holidaylens compare --country IN --subdiv MH --year 2026 --official data/india/mh/2026.csv
+holidaylens compare --country IN --subdiv PB --year 2026 --official data/india/pb/2026.csv
+holidaylens compare --country IN --subdiv TG --year 2026 --official data/india/tg/2026.csv
 ```
 
 Or:
