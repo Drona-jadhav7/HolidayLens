@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "holiday-gap-detector"
+version = "0.1.0"
+description = "Compare official holiday datasets with the Python holidays library."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["holidays>=0.103", "pandas>=2.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+holiday-gap = "holiday_gap.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
