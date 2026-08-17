@@ -1,46 +1,106 @@
 from datetime import date
 
-from holidaylens.compare import compare_dates
+from holidaylens.compare import MatchStatus, compare
 from holidaylens.models import Holiday
 
 
-def test_compare_dates():
+def test_matching_holiday():
     reference = [
         Holiday(date(2026, 1, 26), "Republic Day"),
-        Holiday(date(2026, 5, 1), "Maharashtra Day"),
+    ]
+
+    dataset = [
+        Holiday(date(2026, 1, 26), "Republic Day"),
+    ]
+
+    results = compare(reference, dataset)
+
+    assert len(results) == 1
+    assert results[0].status == MatchStatus.MATCH
+    assert results[0].reference.name == "Republic Day"
+    assert results[0].dataset.name == "Republic Day"
+
+
+def test_missing_holiday():
+    reference = [
         Holiday(date(2026, 9, 14), "Ganesh Chaturthi"),
     ]
 
+    dataset = []
+
+    results = compare(reference, dataset)
+
+    assert len(results) == 1
+    assert results[0].status == MatchStatus.MISSING
+    assert results[0].reference.name == "Ganesh Chaturthi"
+    assert results[0].dataset is None
+
+
+def test_extra_holiday():
+    reference = []
+
     dataset = [
-        Holiday(date(2026, 1, 26), "Republic Day"),
-        Holiday(date(2026, 5, 1), "Maharashtra Day"),
         Holiday(date(2026, 12, 25), "Christmas"),
     ]
 
-    result = compare_dates(reference, dataset)
+    results = compare(reference, dataset)
 
-    assert len(result.matching) == 2
-    assert len(result.missing) == 1
-    assert len(result.extra) == 1
+    assert len(results) == 1
+    assert results[0].status == MatchStatus.EXTRA
+    assert results[0].reference is None
+    assert results[0].dataset.name == "Christmas"
 
-    assert result.missing[0].date == date(2026, 9, 14)
-    assert result.missing[0].name == "Ganesh Chaturthi"
 
-    assert result.extra[0].date == date(2026, 12, 25)
-    assert result.extra[0].name == "Christmas"
-
-def test_compare_handles_multiple_holidays_on_same_date():
+def test_name_mismatch():
     reference = [
-        Holiday(date(2026, 5, 1), "Buddha Purnima"),
         Holiday(date(2026, 5, 1), "Maharashtra Day"),
+    ]
+
+    dataset = [
+        Holiday(date(2026, 5, 1), "Buddha Purnima"),
+    ]
+
+    results = compare(reference, dataset)
+
+    assert len(results) == 1
+    assert results[0].status == MatchStatus.NAME_MISMATCH
+
+    assert results[0].reference.name == "Maharashtra Day"
+    assert results[0].dataset.name == "Buddha Purnima"
+
+
+def test_multiple_holidays_same_date():
+    reference = [
+        Holiday(date(2026, 5, 1), "Maharashtra Day"),
+        Holiday(date(2026, 5, 1), "Buddha Purnima"),
+    ]
+
+    dataset = [
+        Holiday(date(2026, 5, 1), "Maharashtra Day"),
+        Holiday(date(2026, 5, 1), "Buddha Purnima"),
+    ]
+
+    results = compare(reference, dataset)
+
+    assert len(results) == 2
+    assert all(result.status == MatchStatus.MATCH for result in results)
+
+
+def test_multiple_holidays_one_missing():
+    reference = [
+        Holiday(date(2026, 5, 1), "Maharashtra Day"),
+        Holiday(date(2026, 5, 1), "Buddha Purnima"),
     ]
 
     dataset = [
         Holiday(date(2026, 5, 1), "Maharashtra Day"),
     ]
 
-    result = compare_dates(reference, dataset)
+    results = compare(reference, dataset)
 
-    assert len(result.missing) == 0
-    assert len(result.extra) == 0
-    assert len(result.matching) == 2
+    assert len(results) == 2
+
+    statuses = [result.status for result in results]
+
+    assert statuses.count(MatchStatus.MATCH) == 1
+    assert statuses.count(MatchStatus.MISSING) == 1

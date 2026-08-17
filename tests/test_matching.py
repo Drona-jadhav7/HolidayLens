@@ -1,6 +1,6 @@
 from datetime import date
 
-from holidaylens.matching import names_match, normalize_name
+from holidaylens.matching import names_match, normalize_name, split_names
 from holidaylens.models import Holiday
 
 
@@ -36,3 +36,23 @@ def test_different_names_do_not_match():
     )
 
     assert not names_match(reference, dataset)
+
+def test_split_names():
+    assert split_names("Buddha Purnima; Maharashtra Day") == [
+        "buddha purnima",
+        "maharashtra day",
+    ]
+
+
+def test_name_matches_combined_dataset_name():
+    reference = Holiday(
+        date=date(2026, 5, 1),
+        name="Maharashtra Day",
+    )
+
+    dataset = Holiday(
+        date=date(2026, 5, 1),
+        name="Buddha Purnima; Maharashtra Day",
+    )
+
+    assert names_match(reference, dataset)

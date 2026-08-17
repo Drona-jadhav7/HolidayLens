@@ -1,55 +1,95 @@
 from dataclasses import dataclass
+from enum import Enum
 
+from holidaylens.matching import names_match
 from holidaylens.models import Holiday
 
 
+class MatchStatus(Enum):
+    MATCH = "match"
+    MISSING = "missing"
+    EXTRA = "extra"
+    NAME_MISMATCH = "name_mismatch"
+
+
 @dataclass(frozen=True)
-class ComparisonResult:
-    matching: list[Holiday]
-    missing: list[Holiday]
-    extra: list[Holiday]
+class Comparison:
+    status: MatchStatus
+    reference: Holiday | None = None
+    dataset: Holiday | None = None
 
 
-def _group_by_date(holidays: list[Holiday]) -> dict:
-    """Group holidays by date."""
-    grouped = {}
-
-    for holiday in holidays:
-        grouped.setdefault(holiday.date, []).append(holiday)
-
-    return grouped
-
-
-def compare_dates(
+def compare(
     reference: list[Holiday],
     dataset: list[Holiday],
-) -> ComparisonResult:
-    """Compare holidays using their dates."""
+) -> list[Comparison]:
+    """Compare reference holidays against dataset holidays."""
 
-    reference_by_date = _group_by_date(reference)
-    dataset_by_date = _group_by_date(dataset)
+    results: list[Comparison] = []
 
-    reference_dates = set(reference_by_date)
-    dataset_dates = set(dataset_by_date)
+    used_dataset: set[int] = set()
 
-    matching_dates = reference_dates & dataset_dates
-    missing_dates = reference_dates - dataset_dates
-    extra_dates = dataset_dates - reference_dates
+    for reference_index, reference_holiday in enumerate(reference):
+        matched_index = None
 
-    return ComparisonResult(
-        matching=[
-            holiday
-            for holiday_date in sorted(matching_dates)
-            for holiday in reference_by_date[holiday_date]
-        ],
-        missing=[
-            holiday
-            for holiday_date in sorted(missing_dates)
-            for holiday in reference_by_date[holiday_date]
-        ],
-        extra=[
-            holiday
-            for holiday_date in sorted(extra_dates)
-            for holiday in dataset_by_date[holiday_date]
-        ],
-    )
+        for dataset_index, dataset_holiday in enumerate(dataset):
+            if dataset_index in used_dataset:
+                continue
+
+            if reference_holiday.date != dataset_holiday.date:
+                continue
+
+            if names_match(reference_holiday, dataset_holiday):
+                matched_index = dataset_index
+                break
+
+        if matched_index is not None:
+            used_dataset.add(matched_index)
+
+            results.append(
+                Comparison(
+                    status=MatchStatus.MATCH,
+                    reference=reference_holiday,
+                    dataset=dataset[matched_index],
+                )
+            )
+            continue
+
+        same_date_index = next(
+            (
+                index
+                for index, holiday in enumerate(dataset)
+                if index not in used_dataset
+                and holiday.date == reference_holiday.date
+            ),
+            None,
+        )
+
+        if same_date_index is not None:
+            used_dataset.add(same_date_index)
+
+            results.append(
+                Comparison(
+                    status=MatchStatus.NAME_MISMATCH,
+                    reference=reference_holiday,
+                    dataset=dataset[same_date_index],
+                )
+            )
+        else:
+            results.append(
+                Comparison(
+                    status=MatchStatus.MISSING,
+                    reference=reference_holiday,
+                )
+            )
+
+    for dataset_index, dataset_holiday in enumerate(dataset):
+        if dataset_index not in used_dataset:
+            results.append(
+                Comparison(
+                    status=MatchStatus.EXTRA,
+                    dataset=dataset_holiday,
+                )
+            )
+
+    return results

@@ -1,4 +1,5 @@
 import re
+
 from holidaylens.models import Holiday
 
 
@@ -12,7 +13,20 @@ def normalize_name(name: str) -> str:
     return name.strip()
 
 
-def names_match(reference: Holiday, dataset: Holiday) -> bool:
-    """Return whether two holidays have equivalent normalized names."""
+def split_names(name: str) -> list[str]:
+    """Split a combined holiday name into individual names."""
 
-    return normalize_name(reference.name) == normalize_name(dataset.name)
+    return [
+        normalize_name(part)
+        for part in name.split(";")
+        if part.strip()
+    ]
+
+
+def names_match(reference: Holiday, dataset: Holiday) -> bool:
+    """Return whether the dataset contains the reference holiday name."""
+
+    reference_name = normalize_name(reference.name)
+    dataset_names = split_names(dataset.name)
+
+    return reference_name in dataset_names
