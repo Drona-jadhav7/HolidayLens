@@ -40,3 +40,32 @@ def test_load_csv_rejects_missing_name(tmp_path):
 
     with pytest.raises(ValueError, match="Missing holiday name"):
         load_csv(path)
+
+def test_load_csv_metadata(tmp_path):
+    csv_file = tmp_path / "holidays.csv"
+
+    csv_file.write_text(
+        "date,name,category,source\n"
+        "2026-05-01,Maharashtra Day,public,government\n",
+        encoding="utf-8",
+    )
+
+    holidays = load_csv(csv_file)
+
+    assert len(holidays) == 1
+    assert holidays[0].category == "public"
+    assert holidays[0].source == "government"
+
+def test_load_csv_uses_metadata_defaults(tmp_path):
+    csv_file = tmp_path / "holidays.csv"
+
+    csv_file.write_text(
+        "date,name\n"
+        "2026-05-01,Maharashtra Day\n",
+        encoding="utf-8",
+    )
+
+    holidays = load_csv(csv_file)
+
+    assert holidays[0].category == "public"
+    assert holidays[0].source == "unknown"
