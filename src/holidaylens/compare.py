@@ -10,6 +10,7 @@ class MatchStatus(Enum):
     MISSING = "missing"
     EXTRA = "extra"
     NAME_MISMATCH = "name_mismatch"
+    DATE_MISMATCH = "date_mismatch"
 
 
 @dataclass(frozen=True)
@@ -29,9 +30,10 @@ def compare(
 
     used_dataset: set[int] = set()
 
-    for reference_index, reference_holiday in enumerate(reference):
+    for reference_holiday in reference:
         matched_index = None
 
+        # 1. Same date + same name -> MATCH
         for dataset_index, dataset_holiday in enumerate(dataset):
             if dataset_index in used_dataset:
                 continue
@@ -55,6 +57,7 @@ def compare(
             )
             continue
 
+        # 2. Same date + different name -> NAME_MISMATCH
         same_date_index = next(
             (
                 index
@@ -75,14 +78,40 @@ def compare(
                     dataset=dataset[same_date_index],
                 )
             )
-        else:
+            continue
+
+        # 3. Different date + same name -> DATE_MISMATCH
+        date_mismatch_index = next(
+            (
+                index
+                for index, holiday in enumerate(dataset)
+                if index not in used_dataset
+                and names_match(reference_holiday, holiday)
+            ),
+            None,
+        )
+
+        if date_mismatch_index is not None:
+            used_dataset.add(date_mismatch_index)
+
             results.append(
                 Comparison(
-                    status=MatchStatus.MISSING,
+                    status=MatchStatus.DATE_MISMATCH,
                     reference=reference_holiday,
+                    dataset=dataset[date_mismatch_index],
                 )
             )
+            continue
 
+        # 4. No corresponding holiday -> MISSING
+        results.append(
+            Comparison(
+                status=MatchStatus.MISSING,
+                reference=reference_holiday,
+            )
+        )
+
+    # 5. Anything unused in the dataset -> EXTRA
     for dataset_index, dataset_holiday in enumerate(dataset):
         if dataset_index not in used_dataset:
             results.append(

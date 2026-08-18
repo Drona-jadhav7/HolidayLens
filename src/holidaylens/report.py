@@ -13,7 +13,25 @@ def summarize(results: list[Comparison]) -> dict[str, int]:
         "missing": counts.get(MatchStatus.MISSING.value, 0),
         "extra": counts.get(MatchStatus.EXTRA.value, 0),
         "name_mismatch": counts.get(MatchStatus.NAME_MISMATCH.value, 0),
+        "date_mismatch": counts.get(MatchStatus.DATE_MISMATCH.value, 0),
     }
+
+
+def calculate_coverage(
+    results: list[Comparison],
+    reference_count: int,
+) -> float:
+    """Calculate the percentage of reference holidays matched exactly."""
+
+    if reference_count == 0:
+        return 100.0
+
+    matching = sum(
+        result.status == MatchStatus.MATCH
+        for result in results
+    )
+
+    return matching / reference_count * 100
 
 
 def _format_holiday(holiday) -> str:
@@ -34,6 +52,7 @@ def format_report(
     """Format comparison results as a human-readable report."""
 
     summary = summarize(results)
+    coverage = calculate_coverage(results, reference_count)
 
     subdivision_text = subdivision or "N/A"
 
@@ -46,11 +65,13 @@ def format_report(
         "",
         f"Reference:     {reference_count}",
         f"Dataset:       {dataset_count}",
+        f"Coverage:      {coverage:.1f}%",
         "",
         f"Matched:       {summary['matching']}",
         f"Missing:       {summary['missing']}",
         f"Extra:         {summary['extra']}",
         f"Name mismatch: {summary['name_mismatch']}",
+        f"Date mismatch: {summary['date_mismatch']}",
     ]
 
     missing = [
@@ -65,10 +86,16 @@ def format_report(
         if result.status == MatchStatus.EXTRA
     ]
 
-    mismatches = [
+    name_mismatches = [
         result
         for result in results
         if result.status == MatchStatus.NAME_MISMATCH
+    ]
+
+    date_mismatches = [
+        result
+        for result in results
+        if result.status == MatchStatus.DATE_MISMATCH
     ]
 
     if missing:
@@ -95,7 +122,7 @@ def format_report(
         for result in extra:
             lines.append(_format_holiday(result.dataset))
 
-    if mismatches:
+    if name_mismatches:
         lines.extend(
             [
                 "",
@@ -104,10 +131,26 @@ def format_report(
             ]
         )
 
-        for result in mismatches:
+        for result in name_mismatches:
             lines.append(
                 f"{result.reference.date.isoformat()} | "
                 f"{result.reference.name} ↔ {result.dataset.name}"
+            )
+
+    if date_mismatches:
+        lines.extend(
+            [
+                "",
+                "Date Mismatches",
+                "────────────────────────────────",
+            ]
+        )
+
+        for result in date_mismatches:
+            lines.append(
+                f"{result.reference.name}: "
+                f"{result.reference.date.isoformat()} → "
+                f"{result.dataset.date.isoformat()}"
             )
 
     return "\n".join(lines)

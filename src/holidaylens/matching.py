@@ -1,19 +1,6 @@
-import re
-
-from holidaylens.models import Holiday
 from holidaylens.aliases import canonical_name
-from holidaylens.normalization import normalize_name
 from holidaylens.models import Holiday
-
-
-def normalize_name(name: str) -> str:
-    """Normalize a holiday name for comparison."""
-
-    name = name.casefold()
-    name = re.sub(r"[^\w\s]", " ", name)
-    name = re.sub(r"\s+", " ", name)
-
-    return name.strip()
+from holidaylens.normalization import normalize_name
 
 
 def split_names(name: str) -> list[str]:

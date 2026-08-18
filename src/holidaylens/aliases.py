@@ -9,6 +9,9 @@ ALIASES = {
     "dr babasaheb ambedkar jayanti": "dr b ambedkar s birthday",
     "dasara": "dussehra",
     "id e milad": "prophet s birthday",
+    "moharum": "ashura",
+    "mahatma gandhi jayanti": "mahatma gandhi s birthday",
+    "guru nanak jayanti": "guru nanak s birthday",
 }
 
 

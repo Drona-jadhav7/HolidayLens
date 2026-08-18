@@ -2,7 +2,11 @@ from datetime import date
 
 from holidaylens.compare import Comparison, MatchStatus
 from holidaylens.models import Holiday
-from holidaylens.report import format_report, summarize
+from holidaylens.report import (
+    calculate_coverage,
+    format_report,
+    summarize,
+)
 
 
 def test_summarize():
@@ -34,6 +38,7 @@ def test_summarize():
         "missing": 1,
         "extra": 1,
         "name_mismatch": 1,
+        "date_mismatch": 0,
     }
 
 
@@ -60,6 +65,8 @@ def test_format_report():
     assert "Subdivision:   MH" in report
     assert "Year:          2026" in report
     assert "Matched:       1" in report
+    assert "Coverage:      100.0%" in report
+    assert "Date mismatch: 0" in report
 
 
 def test_format_report_includes_details():
@@ -108,3 +115,46 @@ def test_format_report_includes_details():
 
     assert "Name Mismatches" in report
     assert "Maharashtra Day ↔ Buddha Purnima" in report
+
+def test_summarize_date_mismatch():
+    results = [
+        Comparison(
+            status=MatchStatus.DATE_MISMATCH,
+            reference=Holiday(
+                date(2026, 3, 3),
+                "Holi",
+            ),
+            dataset=Holiday(
+                date(2026, 3, 4),
+                "Holi",
+            ),
+        )
+    ]
+
+    summary = summarize(results)
+
+    assert summary["date_mismatch"] == 1
+
+def test_calculate_coverage():
+    results = [
+        Comparison(
+            status=MatchStatus.MATCH,
+            reference=Holiday(
+                date(2026, 1, 26),
+                "Republic Day",
+            ),
+            dataset=Holiday(
+                date(2026, 1, 26),
+                "Republic Day",
+            ),
+        ),
+        Comparison(
+            status=MatchStatus.MISSING,
+            reference=Holiday(
+                date(2026, 9, 14),
+                "Ganesh Chaturthi",
+            ),
+        ),
+    ]
+
+    assert calculate_coverage(results, 2) == 50.0

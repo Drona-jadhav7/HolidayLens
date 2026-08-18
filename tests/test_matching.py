@@ -83,3 +83,18 @@ def test_names_match_alias():
 
 def test_canonical_name_unknown():
     assert canonical_name("Ganesh Chaturthi") == "ganesh chaturthi"
+
+def test_canonical_name_moharum():
+    assert canonical_name("Moharum") == "ashura"
+
+
+def test_canonical_name_mahatma_gandhi_jayanti():
+    assert canonical_name(
+        "Mahatma Gandhi Jayanti"
+    ) == "mahatma gandhi s birthday"
+
+
+def test_canonical_name_guru_nanak_jayanti():
+    assert canonical_name(
+        "Guru Nanak Jayanti"
+    ) == "guru nanak s birthday"

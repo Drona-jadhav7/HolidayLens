@@ -104,3 +104,42 @@ def test_multiple_holidays_one_missing():
 
     assert statuses.count(MatchStatus.MATCH) == 1
     assert statuses.count(MatchStatus.MISSING) == 1
+
+def test_date_mismatch():
+    reference = [
+        Holiday(date(2026, 3, 3), "Holi"),
+    ]
+
+    dataset = [
+        Holiday(date(2026, 3, 4), "Holi"),
+    ]
+
+    results = compare(reference, dataset)
+
+    assert len(results) == 1
+    assert results[0].status == MatchStatus.DATE_MISMATCH
+
+    assert results[0].reference.date == date(2026, 3, 3)
+    assert results[0].dataset.date == date(2026, 3, 4)
+
+    assert results[0].reference.name == "Holi"
+    assert results[0].dataset.name == "Holi"
+
+def test_unrelated_holidays_are_not_date_mismatch():
+    reference = [
+        Holiday(date(2026, 3, 3), "Holi"),
+    ]
+
+    dataset = [
+        Holiday(date(2026, 12, 25), "Christmas"),
+    ]
+
+    results = compare(reference, dataset)
+
+    assert len(results) == 2
+
+    statuses = [result.status for result in results]
+
+    assert statuses.count(MatchStatus.MISSING) == 1
+    assert statuses.count(MatchStatus.EXTRA) == 1
+    assert MatchStatus.DATE_MISMATCH not in statuses
