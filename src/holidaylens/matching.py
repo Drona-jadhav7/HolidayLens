@@ -1,6 +1,9 @@
 import re
 
 from holidaylens.models import Holiday
+from holidaylens.aliases import canonical_name
+from holidaylens.normalization import normalize_name
+from holidaylens.models import Holiday
 
 
 def normalize_name(name: str) -> str:
@@ -26,7 +29,11 @@ def split_names(name: str) -> list[str]:
 def names_match(reference: Holiday, dataset: Holiday) -> bool:
     """Return whether the dataset contains the reference holiday name."""
 
-    reference_name = normalize_name(reference.name)
-    dataset_names = split_names(dataset.name)
+    reference_name = canonical_name(reference.name)
+
+    dataset_names = [
+        canonical_name(name)
+        for name in split_names(dataset.name)
+    ]
 
     return reference_name in dataset_names

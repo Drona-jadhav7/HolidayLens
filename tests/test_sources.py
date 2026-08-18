@@ -8,12 +8,11 @@ from holidaylens.sources import load_csv
 def test_load_csv():
     holidays = load_csv("data/official/IN/MH/2026.csv")
 
-    assert len(holidays) == 3
-
+    assert len(holidays) == 24
     assert holidays[0].date == date(2026, 1, 26)
     assert holidays[0].name == "Republic Day"
     assert holidays[0].category == "public"
-    assert holidays[0].source == "Sample source"
+    assert holidays[0].source.startswith("https://")
 
 
 def test_load_csv_rejects_invalid_date(tmp_path):
