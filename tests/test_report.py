@@ -158,3 +158,95 @@ def test_calculate_coverage():
     ]
 
     assert calculate_coverage(results, 2) == 50.0
+
+def test_report_data_is_json_serializable():
+    import json
+    from datetime import date
+
+    from holidaylens.compare import Comparison, MatchStatus
+    from holidaylens.models import Holiday
+    from holidaylens.report import report_data
+
+    reference = Holiday(
+        date=date(2026, 1, 26),
+        name="Republic Day",
+        category="public",
+        source="government",
+    )
+
+    dataset = Holiday(
+        date=date(2026, 1, 26),
+        name="Republic Day",
+        category="public",
+        source="holidays",
+    )
+
+    results = [
+        Comparison(
+            status=MatchStatus.MATCH,
+            reference=reference,
+            dataset=dataset,
+        )
+    ]
+
+    data = report_data(
+        results,
+        country="IN",
+        subdivision="MH",
+        year=2026,
+        reference_count=1,
+        dataset_count=1,
+    )
+
+    serialized = json.dumps(data)
+
+    assert data["country"] == "IN"
+    assert data["subdivision"] == "MH"
+    assert data["year"] == 2026
+    assert data["coverage"] == 100.0
+    assert data["summary"]["matching"] == 1
+    assert len(data["comparisons"]) == 1
+    assert serialized
+
+
+def test_report_data_includes_mismatch_details():
+    from datetime import date
+
+    from holidaylens.compare import Comparison, MatchStatus
+    from holidaylens.models import Holiday
+    from holidaylens.report import report_data
+
+    reference = Holiday(
+        date=date(2026, 3, 3),
+        name="Holi (Second Day)",
+        category="public",
+        source="government",
+    )
+
+    dataset = Holiday(
+        date=date(2026, 3, 3),
+        name="Holi",
+        category="public",
+        source="holidays",
+    )
+
+    data = report_data(
+        [
+            Comparison(
+                status=MatchStatus.NAME_MISMATCH,
+                reference=reference,
+                dataset=dataset,
+            )
+        ],
+        country="IN",
+        subdivision="MH",
+        year=2026,
+        reference_count=1,
+        dataset_count=1,
+    )
+
+    comparison = data["comparisons"][0]
+
+    assert comparison["status"] == "name_mismatch"
+    assert comparison["reference"]["name"] == "Holi (Second Day)"
+    assert comparison["dataset"]["name"] == "Holi"

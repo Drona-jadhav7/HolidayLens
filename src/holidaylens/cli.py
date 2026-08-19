@@ -1,9 +1,10 @@
 import argparse
+import json
 from pathlib import Path
 
 from holidaylens.compare import compare
 from holidaylens.library import load_holidays
-from holidaylens.report import format_report
+from holidaylens.report import format_report, report_data
 from holidaylens.sources import load_csv
 
 
@@ -44,6 +45,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to a reference CSV file.",
     )
 
+    audit_parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Output format. Defaults to text.",
+    )
+
     return parser
 
 
@@ -78,16 +86,32 @@ def run_audit(args: argparse.Namespace) -> int:
 
     results = compare(reference, dataset)
 
-    report = format_report(
-        results,
-        country=country,
-        subdivision=subdivision,
-        year=args.year,
-        reference_count=len(reference),
-        dataset_count=len(dataset),
-    )
-
-    print(report)
+    if args.format == "json":
+        print(
+            json.dumps(
+                report_data(
+                    results,
+                    country=country,
+                    subdivision=subdivision,
+                    year=args.year,
+                    reference_count=len(reference),
+                    dataset_count=len(dataset),
+                ),
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+    else:
+        print(
+            format_report(
+                results,
+                country=country,
+                subdivision=subdivision,
+                year=args.year,
+                reference_count=len(reference),
+                dataset_count=len(dataset),
+            )
+        )
 
     has_issues = any(
         result.status.value != "match"

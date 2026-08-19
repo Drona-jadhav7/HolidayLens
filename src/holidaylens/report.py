@@ -154,3 +154,53 @@ def format_report(
             )
 
     return "\n".join(lines)
+
+def report_data(
+    results: list[Comparison],
+    *,
+    country: str,
+    subdivision: str | None,
+    year: int,
+    reference_count: int,
+    dataset_count: int,
+) -> dict:
+    """Return comparison results as JSON-serializable data."""
+
+    summary = summarize(results)
+    coverage = calculate_coverage(results, reference_count)
+
+    comparisons = []
+
+    for result in results:
+        item = {
+            "status": result.status.value,
+        }
+
+        if result.reference is not None:
+            item["reference"] = {
+                "date": result.reference.date.isoformat(),
+                "name": result.reference.name,
+                "category": result.reference.category,
+                "source": result.reference.source,
+            }
+
+        if result.dataset is not None:
+            item["dataset"] = {
+                "date": result.dataset.date.isoformat(),
+                "name": result.dataset.name,
+                "category": result.dataset.category,
+                "source": result.dataset.source,
+            }
+
+        comparisons.append(item)
+
+    return {
+        "country": country,
+        "subdivision": subdivision,
+        "year": year,
+        "reference_count": reference_count,
+        "dataset_count": dataset_count,
+        "coverage": round(coverage, 1),
+        "summary": summary,
+        "comparisons": comparisons,
+    }
