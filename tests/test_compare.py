@@ -143,3 +143,32 @@ def test_unrelated_holidays_are_not_date_mismatch():
     assert statuses.count(MatchStatus.MISSING) == 1
     assert statuses.count(MatchStatus.EXTRA) == 1
     assert MatchStatus.DATE_MISMATCH not in statuses
+
+def test_same_date_multiple_holidays_with_one_name_mismatch():
+    reference = [
+        Holiday(date(2026, 5, 1), "Maharashtra Day"),
+        Holiday(date(2026, 5, 1), "Buddha Purnima"),
+    ]
+
+    dataset = [
+        Holiday(date(2026, 5, 1), "Maharashtra Day"),
+        Holiday(date(2026, 5, 1), "Akshaya Tritiya"),
+    ]
+
+    results = compare(reference, dataset)
+
+    assert len(results) == 2
+
+    statuses = [result.status for result in results]
+
+    assert statuses.count(MatchStatus.MATCH) == 1
+    assert statuses.count(MatchStatus.NAME_MISMATCH) == 1
+
+    mismatch = next(
+        result
+        for result in results
+        if result.status == MatchStatus.NAME_MISMATCH
+    )
+
+    assert mismatch.reference.name == "Buddha Purnima"
+    assert mismatch.dataset.name == "Akshaya Tritiya"

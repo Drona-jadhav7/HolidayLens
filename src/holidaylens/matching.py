@@ -7,7 +7,7 @@ def split_names(name: str) -> list[str]:
     """Split a combined holiday name into individual names."""
 
     return [
-        normalize_name(part)
+        part.strip()
         for part in name.split(";")
         if part.strip()
     ]

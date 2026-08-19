@@ -41,8 +41,8 @@ def test_different_names_do_not_match():
 
 def test_split_names():
     assert split_names("Buddha Purnima; Maharashtra Day") == [
-        "buddha purnima",
-        "maharashtra day",
+        "Buddha Purnima",
+        "Maharashtra Day",
     ]
 
 
@@ -98,3 +98,59 @@ def test_canonical_name_guru_nanak_jayanti():
     assert canonical_name(
         "Guru Nanak Jayanti"
     ) == "guru nanak s birthday"
+
+def test_canonical_name_buddha_pournima():
+    assert canonical_name("Buddha Pournima") == "buddha purnima"
+
+
+def test_canonical_name_bakri_id():
+    assert canonical_name(
+        "Bakri Id (Id-Uz-Zuha)"
+    ) == "eid al adha"
+
+
+def test_canonical_name_ambedkar_jayanti():
+    assert canonical_name(
+        "Dr. Babasaheb Ambedkar Jayanti"
+    ) == "dr b r ambedkar s birthday"
+
+def test_names_match_buddha_pournima_alias():
+    reference = Holiday(
+        date=date(2026, 5, 1),
+        name="Buddha Pournima",
+    )
+
+    dataset = Holiday(
+        date=date(2026, 5, 1),
+        name="Buddha Purnima",
+    )
+
+    assert names_match(reference, dataset)
+
+
+def test_names_match_bakri_id_alias():
+    reference = Holiday(
+        date=date(2026, 5, 28),
+        name="Bakri Id (Id-Uz-Zuha)",
+    )
+
+    dataset = Holiday(
+        date=date(2026, 5, 27),
+        name="Eid al-Adha",
+    )
+
+    assert names_match(reference, dataset)
+
+
+def test_names_match_ambedkar_alias():
+    reference = Holiday(
+        date=date(2026, 4, 14),
+        name="Dr. Babasaheb Ambedkar Jayanti",
+    )
+
+    dataset = Holiday(
+        date=date(2026, 4, 14),
+        name="Dr. B. R. Ambedkar's Birthday",
+    )
+
+    assert names_match(reference, dataset)
