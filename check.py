@@ -5,11 +5,11 @@ from holidaylens.sources import load_csv
 
 
 country = "IN"
-subdivision = "MP"
+subdivision = "AS"
 year = 2026
 
 reference = load_csv(
-    "data/official/IN/MP/2026.csv"
+    "data/official/IN/AS/2026.csv"
 )
 
 dataset = load_holidays(
