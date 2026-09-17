@@ -4,17 +4,16 @@ from holidaylens.report import format_report
 from holidaylens.sources import load_csv
 
 
-country = "IN"
-subdivision = "AS"
+country = "ET"
+subdivision = ""
 year = 2026
 
 reference = load_csv(
-    "data/official/IN/AS/2026.csv"
+    "data/official/ET/2026.csv"
 )
 
 dataset = load_holidays(
     country,
-    subdiv=subdivision,
     years=year,
 )
 
