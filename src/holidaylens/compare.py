@@ -1,8 +1,18 @@
+"""Comparison engine & discrepancy classifier.
+
+Compares reference holidays against a dataset (typically the output
+of the ``holidays`` library) and classifies each pair into one of
+five statuses: MATCH, MISSING, EXTRA, NAME_MISMATCH, DATE_MISMATCH.
+"""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum
 
 from holidaylens.matching import names_match
-from holidaylens.models import Holiday
+from holidaylens.models import AuditResult, Holiday
+from holidaylens.report import calculate_coverage, summarize
 
 
 class MatchStatus(Enum):
@@ -24,7 +34,15 @@ def compare(
     reference: list[Holiday],
     dataset: list[Holiday],
 ) -> list[Comparison]:
-    """Compare reference holidays against dataset holidays."""
+    """Compare reference holidays against dataset holidays.
+
+    The algorithm processes references in order:
+    1. Same date + same name → MATCH
+    2. Same date + different name → NAME_MISMATCH
+    3. Different date + same name → DATE_MISMATCH
+    4. No corresponding holiday → MISSING
+    5. Anything unused in the dataset → EXTRA
+    """
 
     results: list[Comparison] = []
 
@@ -122,3 +140,31 @@ def compare(
             )
 
     return results
+
+
+def build_audit_result(
+    *,
+    country: str,
+    year: int,
+    category: str,
+    subdivision: str | None = None,
+    reference: list[Holiday],
+    dataset: list[Holiday],
+    comparisons: list[Comparison],
+) -> AuditResult:
+    """Build an AuditResult from raw comparison data."""
+
+    summary = summarize(comparisons)
+    coverage = calculate_coverage(comparisons, len(reference))
+
+    return AuditResult(
+        country=country,
+        year=year,
+        category=category,
+        subdivision=subdivision,
+        reference_count=len(reference),
+        dataset_count=len(dataset),
+        coverage=round(coverage, 1),
+        summary=summary,
+        comparisons=comparisons,
+    )

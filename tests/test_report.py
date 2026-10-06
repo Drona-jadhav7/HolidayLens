@@ -114,7 +114,7 @@ def test_format_report_includes_details():
     assert "2026-12-25 | Christmas" in report
 
     assert "Name Mismatches" in report
-    assert "Maharashtra Day ↔ Buddha Purnima" in report
+    assert "Maharashtra Day <-> Buddha Purnima" in report
 
 def test_summarize_date_mismatch():
     results = [

@@ -1,1225 +1,680 @@
-# HolidayLens
+# HolidayLens v2
 
-**HolidayLens** is a data-quality and verification tool for holiday calendars.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/tests-75%20passed-brightgreen.svg)](tests/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Upstream](https://img.shields.io/badge/auditing-vacanza%2Fpython--holidays-orange.svg)](https://github.com/vacanza/python-holidays)
 
-It compares an authoritative holiday reference dataset against the output of the Python [`holidays`](https://github.com/vacanza/python-holidays) library and identifies potential discrepancies such as:
+**HolidayLens v2** is an automated multi-region data-quality, harvesting, and verification engine for calendar libraries.
 
-* Missing holidays
-* Extra holidays
-* Different holiday names
-* Different holiday dates
-* Coverage gaps
+It programmatically extracts official notices from government gazettes, central banks, and financial exchanges, normalizes them into version-controlled reference datasets, compares them across multiple scopes against the Python [`holidays`](https://github.com/vacanza/python-holidays) library (`vacanza/python-holidays`), and produces actionable discrepancy reports and ready-to-file GitHub issue templates.
 
-HolidayLens is designed primarily as a **developer and research tool** for finding potential inaccuracies and missing coverage in holiday libraries.
+---
 
-It does **not** aim to become another holiday-calendar website or a replacement for the `holidays` library.
+## Table of Contents
+
+- [Why HolidayLens?](#why-holidaylens)
+- [Quickstart in 60 Seconds](#quickstart-in-60-seconds)
+- [Installation Guide](#installation-guide)
+  - [Requirements](#requirements)
+  - [Clone & Virtual Environment](#clone--virtual-environment)
+  - [Install HolidayLens](#install-holidaylens)
+  - [Run the Test Suite](#run-the-test-suite)
+- [Core Architecture & Capabilities](#core-architecture--capabilities)
+  - [1. Three Orthogonal Auditing Scopes](#1-three-orthogonal-auditing-scopes)
+  - [2. Deterministic Storage & Provenance Tracking](#2-deterministic-storage--provenance-tracking)
+  - [3. Linguistic & Transliteration Normalization](#3-linguistic--transliteration-normalization)
+  - [4. Five Discrepancy Classifications](#4-five-discrepancy-classifications)
+- [CLI Reference](#cli-reference)
+  - [`holidaylens audit`](#1-holidaylens-audit--single-calendar-auditing)
+  - [`holidaylens suite`](#2-holidaylens-suite--batch-multi-country-runner)
+  - [`holidaylens extract`](#3-holidaylens-extract--official-data-harvesting)
+  - [`holidaylens report`](#4-holidaylens-report--github-issue-generator)
+  - [`holidaylens list`](#5-holidaylens-list--registered-extractor-directory)
+- [Real-World Case Study: Diwali & Muhurat Trading on NSE](#real-world-case-study-diwali--muhurat-trading-on-nse)
+- [Reference Data Layout & Schema](#reference-data-layout--schema)
+  - [Directory Hierarchy](#directory-hierarchy)
+  - [CSV Schema](#csv-schema)
+- [Developer Guide](#developer-guide)
+  - [Creating a New Official Extractor](#creating-a-new-official-extractor)
+  - [Registering Linguistic Aliases](#registering-linguistic-aliases)
+- [Recommended Contributor Workflow](#recommended-contributor-workflow)
+- [Project Structure](#project-structure)
+- [License & Acknowledgements](#license--acknowledgements)
 
 ---
 
 ## Why HolidayLens?
 
-Holiday calendars can vary between:
+Holiday calendars are deceptively complex. Rules shift between national governments, state departments, central banking authorities, and stock exchanges:
 
-* countries
-* states and provinces
-* subdivisions
-* years
-* government notifications
-* religious or regional observances
+* **Movable religious holidays** (e.g. Diwali, Eid, Vesak, Songkran) follow astronomical or lunar calculations that are announced via state gazettes and can vary year-to-year or between states.
+* **Banking closures** (e.g. India RBI Section 25 Negotiable Instruments Act or Bank of Thailand) govern financial institutions and may diverge from general civil holidays.
+* **Trading exchanges** (e.g. NSE/BSE in India, JPX in Japan, SGX in Singapore) enforce unique trading session schedules, such as special 1-hour evening trading sessions on festival days.
+* **Transliteration variations** (Devanagari, Romaji, Kanji, Malay, Thai, Hangul) create false naming discrepancies if not normalized.
 
-A holiday library may therefore contain an incorrect date, miss a holiday, include an outdated holiday, or use a different name from the authoritative source.
-
-Finding these problems manually can be difficult.
-
-HolidayLens provides a repeatable workflow:
+HolidayLens automates the discovery of genuine data gaps without manual guesswork:
 
 ```text
-Authoritative source
-        │
-        ▼
-Reference dataset
-        │
-        ▼
-     HolidayLens
-        │
-        ├── Normalize names
-        ├── Apply aliases
-        ├── Match holidays
-        └── Compare dates
-        │
-        ▼
-Potential discrepancies
-        │
-        ▼
-Human verification
-        │
-        ▼
-Upstream issue / pull request
+Official Gazette / Central Bank / Stock Exchange
+                       │
+                       ▼
+       HolidayLens Extractor Subsystem
+                       │
+                       ▼
+    Deterministic Reference Dataset (CSV + Provenance)
+                       │
+                       ▼
+       HolidayLens Multi-Scope Compare Engine
+       ├── Unicode accent stripping & token Jaccard similarity
+       ├── Canonical alias & transliteration dictionary
+       └── Scope alignment (Public vs Bank vs Financial)
+                       │
+                       ▼
+            Actionable Discrepancy Report
+                       │
+                       ▼
+    Automated GitHub Issue / Pull Request Markdown
+                       │
+                       ▼
+        Validated Upstream Contribution
 ```
-
-The important distinction is that HolidayLens identifies **potential discrepancies**. It does not automatically declare that the `holidays` library is wrong.
-
-Every finding should be verified against an authoritative source before an upstream change is proposed.
 
 ---
 
-# Features
+## Quickstart in 60 Seconds
 
-HolidayLens currently provides:
+Run a full batch audit across Asian countries for 2026:
 
-### Reference data loading
-
-Load holiday information from CSV files containing:
-
-```text
-date,name,category,source
+```bash
+# Set PYTHONPATH if running from a local checkout without pip install
+python -m holidaylens.cli suite --year 2026
 ```
 
-Example:
+Audit the National Stock Exchange of India (XNSE) trading calendar:
 
-```csv
-date,name,category,source
-2026-01-26,Republic Day,public,https://example.gov.in/holidays
-2026-05-01,Maharashtra Day,public,https://example.gov.in/holidays
+```bash
+python -m holidaylens.cli audit --country IN --category financial --market XNSE --year 2026
 ```
 
-### `holidays` library integration
+Export structured JSON and convert it into a ready-to-submit GitHub issue template:
 
-HolidayLens can load holiday data directly from the Python `holidays` package.
+```bash
+# 1. Audit and save to JSON
+python -m holidaylens.cli audit --country IN --category financial --market XNSE --year 2026 --format json --output reports/in_xnse_2026.json
 
-For example:
-
-```python
-load_holidays(
-    "IN",
-    subdiv="MH",
-    years=2026,
-)
+# 2. Generate GitHub issue markdown
+python -m holidaylens.cli report reports/in_xnse_2026.json --output reports/issue_xnse.md
 ```
 
-### Name normalization
+Extract public holidays directly using the Japan Cabinet Office (CAO) extractor:
 
-Holiday names can differ between sources.
-
-HolidayLens normalizes names before comparison so that harmless naming differences do not automatically become false discrepancies.
-
-### Alias support
-
-Known equivalent names can be represented using canonical names and aliases.
-
-### Comparison engine
-
-HolidayLens currently identifies:
-
-```text
-MATCH
-MISSING
-EXTRA
-NAME_MISMATCH
-DATE_MISMATCH
+```bash
+python -m holidaylens.cli extract --country JP --category government --year 2026
 ```
-
-### Coverage calculation
-
-HolidayLens calculates the percentage of reference holidays that are matched exactly.
-
-### Human-readable reports
-
-The CLI produces reports suitable for manual investigation.
-
-### JSON output
-
-The same audit can be emitted as structured JSON for scripts, CI systems, and future integrations.
-
-### Provenance
-
-Reference records retain their source information so that detected discrepancies can be traced back to the source used for verification.
 
 ---
 
-# Project status
+## Installation Guide
 
-HolidayLens is currently an early usable version.
+### Requirements
 
-The core workflow is implemented and tested.
+* **Python 3.10+** (Tested on Python 3.10, 3.11, 3.12, 3.13, and 3.14)
+* **`holidays` package** (`vacanza/python-holidays >= 0.46`)
 
-Current test status:
+### Clone & Virtual Environment
 
-```text
-53 tests passing
-```
-
-The current version is intentionally focused on the core auditing workflow rather than a large collection of features.
-
----
-
-# Installation
-
-## Requirements
-
-HolidayLens requires:
-
-* Python 3.10 or newer
-* the `holidays` Python package
-
-Python 3.13 is also supported by the current development environment.
-
----
-
-## Clone the repository
+Clone the repository:
 
 ```bash
 git clone https://github.com/Drona-jadhav7/HolidayLens.git
 cd HolidayLens
 ```
 
----
+Create and activate a virtual environment:
 
-## Create a virtual environment
-
-### Windows / Git Bash
-
-```bash
-py -m venv .venv
-source .venv/Scripts/activate
+**On Windows (PowerShell):**
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-If your environment already provides the virtual environment, activate it with:
-
-```bash
-source .venv/Scripts/activate
+**On Windows (Command Prompt):**
+```cmd
+python -m venv .venv
+.\.venv\Scripts\activate.bat
 ```
 
----
-
-## Install HolidayLens
-
-For development:
-
+**On Linux / macOS:**
 ```bash
-py -m pip install -e .
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-Install development dependencies:
+### Install HolidayLens
+
+Install HolidayLens in editable development mode:
 
 ```bash
-py -m pip install -e ".[dev]"
+pip install -e .
 ```
 
----
+To include test and development dependencies:
 
-# Project structure
+```bash
+pip install -e ".[dev]"
+```
 
-HolidayLens uses a `src` layout:
+### Run the Test Suite
+
+Verify that all unit and integration tests pass:
+
+```bash
+python -m pytest
+```
 
 ```text
-HolidayLens/
-├── data/
-│   └── official/
-│       └── IN/
-│           ├── MH/
-│           │   └── 2026.csv
-│           ├── MP/
-│           │   └── 2026.csv
-│           └── ...
-│
-├── src/
-│   └── holidaylens/
-│       ├── __init__.py
-│       ├── aliases.py
-│       ├── compare.py
-│       ├── library.py
-│       ├── matching.py
-│       ├── models.py
-│       ├── normalization.py
-│       ├── provenance.py
-│       ├── report.py
-│       ├── sources.py
-│       └── cli.py
-│
-├── tests/
-│   ├── test_compare.py
-│   ├── test_library.py
-│   ├── test_matching.py
-│   ├── test_models.py
-│   ├── test_provenance.py
-│   ├── test_report.py
-│   ├── test_sources.py
-│   └── test_cli.py
-│
-├── pyproject.toml
-├── README.md
-└── LICENSE
+============================= 75 passed in 1.89s ==============================
 ```
 
 ---
 
-# Reference data
+## Core Architecture & Capabilities
 
-HolidayLens expects authoritative reference data in CSV format.
+HolidayLens v2 is built on four architectural pillars:
 
-The minimum required columns are:
+### 1. Three Orthogonal Auditing Scopes
 
-```text
-date
-name
-```
+Rather than flattening all holidays into a single generic list, HolidayLens distinguishes between three orthogonal scopes:
 
-Optional columns are:
+| Scope | Category Parameter | Target Authority | Target Function in `holidays` |
+|---|---|---|---|
+| **Scope A: Public / Civil** | `--category public` | Government Ministries, Official Gazettes | `holidays.country_holidays()` |
+| **Scope B: Banking** | `--category bank` | Central Banks (RBI, BOT, MAS) | `holidays.country_holidays(categories=("public", "bank"))` |
+| **Scope C: Financial / Trading** | `--category financial --market <MIC>` | Stock Exchanges (XNSE, XBOM, XTKS, XSES, XKRX) | `holidays.financial_holidays(market)` |
 
-```text
-category
-source
-```
+### 2. Deterministic Storage & Provenance Tracking
 
-The complete recommended format is:
+Every reference dataset in `data/official/` maintains cryptographic integrity and full origin provenance:
+- **`source`**: The exact URL of the gazette notification, regulatory order, or exchange circular.
+- **`authority`**: The issuing entity (e.g. *Reserve Bank of India*, *National Stock Exchange of India*, *Cabinet Office, Government of Japan*).
+- **`retrieved_at`**: UTC timestamp of data harvesting.
+- **`checksum`**: SHA-256 digest computed via [`compute_checksum()`](file:///d:/MY/HolidayLens/src/holidaylens/provenance.py#L51).
 
-```csv
-date,name,category,source
-2026-01-26,Republic Day,public,https://example.gov.in/holidays
-2026-05-01,Maharashtra Day,public,https://example.gov.in/holidays
-```
+### 3. Linguistic & Transliteration Normalization
 
-## Field descriptions
+To prevent superficial spelling or transliteration differences from triggering false positives:
+- **Unicode Accent Stripping**: Normalizes NFKD combining marks (e.g., `é` -> `e`).
+- **Punctuation & Case Neutralization**: Converts to lowercase, strips punctuation, collapses whitespace.
+- **Jaccard Token Similarity**: Measures word-token overlap to recognize reordered multi-word phrases.
+- **Canonical Alias Map**: [`holidaylens.aliases`](file:///d:/MY/HolidayLens/src/holidaylens/aliases.py) maps hundreds of regional language terms to standard library forms (e.g., Devanagari/Marathi *Gudhi Padwa* -> *Gudi Padwa*, Kanji *元日* -> *New Year's Day*, Malay *Hari Raya Aidilfitri* -> *Eid al Fitr*, Tagalog *Araw ng Kagitingan* -> *Day of Valor*).
 
-### `date`
+### 4. Five Discrepancy Classifications
 
-The holiday date in ISO format:
+Every holiday comparison result falls into one of five statuses:
 
-```text
-YYYY-MM-DD
-```
-
-Example:
-
-```text
-2026-05-01
-```
-
-### `name`
-
-The name used by the authoritative source.
-
-Example:
-
-```text
-Maharashtra Day
-```
-
-### `category`
-
-The type of holiday.
-
-For example:
-
-```text
-public
-```
-
-If omitted, HolidayLens currently defaults it to:
-
-```text
-public
-```
-
-### `source`
-
-The authoritative source from which the record was collected.
-
-For example:
-
-```text
-https://example.gov.in/holidays
-```
-
-If omitted, HolidayLens currently defaults it to:
-
-```text
-unknown
-```
-
-For real auditing work, providing the source is strongly recommended.
+| Status | Meaning | Action Needed |
+|---|---|---|
+| **`MATCH`** | Date and normalized canonical name match exactly. | Verified accurate. |
+| **`MISSING`** | Holiday exists in the official gazette/notice but is absent from the library. | High priority upstream bug candidate. |
+| **`EXTRA`** | Holiday exists in the library but is absent from the authoritative source. | Check whether the library included an unofficial observance. |
+| **`NAME_MISMATCH`** | Dates match, but names differ beyond known aliases. | Check if an alias or transliteration should be added. |
+| **`DATE_MISMATCH`** | Names match, but dates differ. | Critical check: possible movable festival date error or missing substitution rule. |
 
 ---
 
-# Reference-data directory
+## CLI Reference
 
-The current CLI convention is:
-
-```text
-data/official/<COUNTRY>/<SUBDIVISION>/<YEAR>.csv
-```
-
-For example:
+HolidayLens exposes five unified subcommands:
 
 ```text
-data/official/IN/MH/2026.csv
-```
-
-where:
-
-* `IN` = India
-* `MH` = Maharashtra
-* `2026` = year
-
-A country-wide reference dataset can use:
-
-```text
-data/official/IN/2026.csv
+holidaylens [-h] {audit,suite,extract,report,list} ...
 ```
 
 ---
 
-# Using the CLI
+### 1. `holidaylens audit` – Single Calendar Auditing
 
-After installation, the main command is:
-
-```bash
-holidaylens
-```
-
-Show help:
+Compares an official reference calendar against the `holidays` library.
 
 ```bash
-holidaylens --help
+holidaylens audit --country <CODE> --year <YEAR> [options]
 ```
 
-Show audit help:
+#### Options:
+* `--country` *(required)*: ISO 3166-1 alpha-2 country code (e.g. `IN`, `JP`, `SG`, `MY`, `PH`, `TH`, `KR`).
+* `--year` *(required)*: Four-digit year to audit (e.g. `2026`).
+* `--subdivision`: State or province code (e.g. `--subdivision MH`).
+* `--category`: One of `public` (default), `bank`, or `financial`.
+* `--market`: Market Identifier Code (required for `financial`, e.g. `XNSE`, `XBOM`, `XTKS`).
+* `--reference`: Path to an explicit reference CSV file. If omitted, HolidayLens automatically searches `data/official/<COUNTRY>/...`.
+* `--format`: Output format: `text` (default) or `json`.
+* `--output`: Path to write the JSON report to (used with `--format json`).
 
+#### Examples:
+
+**Audit national public holidays (human-readable table):**
 ```bash
-holidaylens audit --help
+holidaylens audit --country SG --year 2026
 ```
 
----
-
-# Run an audit
-
-For Maharashtra, India, in 2026:
-
+**Audit state-level holidays (Maharashtra, India):**
 ```bash
 holidaylens audit --country IN --subdivision MH --year 2026
 ```
 
-The equivalent module invocation is:
+**Audit central bank holidays (Reserve Bank of India):**
+```bash
+holidaylens audit --country IN --category bank --year 2026
+```
+
+**Audit stock exchange trading schedule (NSE India):**
+```bash
+holidaylens audit --country IN --category financial --market XNSE --year 2026
+```
+
+**Export structured JSON report:**
+```bash
+holidaylens audit --country IN --category financial --market XNSE --year 2026 --format json --output reports/in_xnse_2026.json
+```
+
+---
+
+### 2. `holidaylens suite` – Batch Multi-Country Runner
+
+Executes batch data-quality audits across all available countries, subdivisions, and scopes in `data/official/`.
 
 ```bash
-py -m holidaylens.cli audit --country IN --subdivision MH --year 2026
+holidaylens suite --year <YEAR> [--data-dir <DIR>]
 ```
 
----
+#### Options:
+* `--year` *(required)*: Four-digit year to audit (e.g. `2026`).
+* `--data-dir`: Custom path to official reference directory (defaults to `data/official`).
 
-# Example output
+#### Example:
+```bash
+holidaylens suite --year 2026
+```
 
-A typical report looks like:
-
+#### Sample Output:
 ```text
-HolidayLens Report
-────────────────────────────────
-Country:       IN
-Subdivision:   MH
-Year:          2026
+Suite Results: 2026
+--------------------------------
+Total audits:  12
+Passed:        5
+Failed:        7
+Errors:        0
 
-Reference:     24
-Dataset:       21
-Coverage:      66.7%
-
-Matched:       16
-Missing:       5
-Extra:         2
-Name mismatch: 2
-Date mismatch: 1
-
-Missing Holidays
-────────────────────────────────
-2026-02-15 | Mahashivratri
-2026-05-01 | Buddha Pournima
-2026-08-15 | Parsi New Year (Shahenshahi)
-2026-09-14 | Ganesh Chaturthi
-2026-11-10 | Diwali (Bali Pratipada)
-
-Extra Holidays
-────────────────────────────────
-2026-03-04 | Holi
-2026-09-04 | Janmashtami (Vaishnava)
-
-Name Mismatches
-────────────────────────────────
-2026-03-03 | Holi (Second Day) ↔ Holi
-
-Date Mismatches
-────────────────────────────────
-Bakri Id (Id-Uz-Zuha): 2026-05-28 → 2026-05-27
+  [FAIL] IN/AS                coverage=14.3% (public)
+  [FAIL] IN/MH                coverage=50.0% (public)
+  [FAIL] IN/MP                coverage=44.0% (public)
+  [FAIL] IN/UK                coverage=73.7% (public)
+  [FAIL] IN/national          coverage=30.4% (bank)
+  [FAIL] IN/national          coverage=76.5% (financial)
+  [PASS] JP/national          coverage=100.0% (public)
+  [PASS] SG/national          coverage=100.0% (public)
+  [PASS] MY/national          coverage=100.0% (public)
+  [PASS] PH/national          coverage=100.0% (public)
+  [FAIL] TH/national          coverage=100.0% (public)
+  [PASS] KR/national          coverage=100.0% (public)
 ```
 
-The exact output will depend on the reference data and the current version of the `holidays` library.
+> **Note on exit codes:** The `suite` command exits with `0` if all audits passed with 100% exact coverage, and `1` if any discrepancies were discovered (ideal for automated CI assertions).
 
 ---
 
-# JSON output
+### 3. `holidaylens extract` – Official Data Harvesting
 
-The CLI supports structured JSON output.
-
-Use:
+Harvests official holiday schedules using country-specific and category-specific extractors.
 
 ```bash
-holidaylens audit \
-  --country IN \
-  --subdivision MH \
-  --year 2026 \
-  --format json
+holidaylens extract --country <CODE> --category <CAT> --year <YEAR> [--output <PATH>]
 ```
 
-The output contains:
+#### Options:
+* `--country` *(required)*: ISO country code (e.g. `JP`, `IN`, `SG`, `MY`, `PH`, `TH`, `KR`).
+* `--category`: Extractor category (e.g. `government`, `bank`, `financial`). Default: `government`.
+* `--year` *(required)*: Year to extract.
+* `--output`: Output CSV file path. If omitted, outputs tab-delimited records to stdout.
 
-* country
-* subdivision
-* year
-* reference count
-* dataset count
-* coverage
-* summary counts
-* individual comparison records
+#### Examples:
 
-Example structure:
-
-```json
-{
-  "country": "IN",
-  "subdivision": "MH",
-  "year": 2026,
-  "reference_count": 24,
-  "dataset_count": 21,
-  "coverage": 66.7,
-  "summary": {
-    "matching": 16,
-    "missing": 5,
-    "extra": 2,
-    "name_mismatch": 2,
-    "date_mismatch": 1
-  },
-  "comparisons": [
-    {
-      "status": "match",
-      "reference": {
-        "date": "2026-01-26",
-        "name": "Republic Day",
-        "category": "public",
-        "source": "government"
-      },
-      "dataset": {
-        "date": "2026-01-26",
-        "name": "Republic Day",
-        "category": "public",
-        "source": "holidays"
-      }
-    }
-  ]
-}
+**Print extracted Japan holidays to terminal:**
+```bash
+holidaylens extract --country JP --category government --year 2026
 ```
 
-JSON output is useful for future automation and CI integration.
-
----
-
-# Comparison statuses
-
-HolidayLens currently uses five comparison statuses.
-
-## `MATCH`
-
-The reference and library contain equivalent holidays on the same date.
-
-```text
-Reference:
-2026-01-26 — Republic Day
-
-Library:
-2026-01-26 — Republic Day
-
-Result:
-MATCH
+**Save extracted Singapore MOM holidays to CSV:**
+```bash
+holidaylens extract --country SG --category government --year 2026 --output data/official/SG/government/2026.csv
 ```
 
 ---
 
-## `MISSING`
+### 4. `holidaylens report` – GitHub Issue Generator
 
-A holiday exists in the reference dataset but HolidayLens cannot find a corresponding library holiday.
-
-```text
-Reference:
-2026-09-14 — Ganesh Chaturthi
-
-Library:
-No corresponding holiday
-
-Result:
-MISSING
-```
-
-This can indicate a potential missing holiday in the library.
-
-It must still be verified against the authoritative source and the library's intended scope.
-
----
-
-## `EXTRA`
-
-A holiday exists in the library but does not have a corresponding reference record.
-
-```text
-Reference:
-No corresponding holiday
-
-Library:
-2026-03-04 — Holi
-
-Result:
-EXTRA
-```
-
-An extra result does not automatically mean the library is wrong.
-
-The reference dataset might be incomplete, or the library might intentionally include an observance that the reference source does not.
-
----
-
-## `NAME_MISMATCH`
-
-The reference and library contain holidays on the same date but use different names.
-
-```text
-Reference:
-2026-03-03 — Holi (Second Day)
-
-Library:
-2026-03-03 — Holi
-
-Result:
-NAME_MISMATCH
-```
-
-This can be a harmless naming difference, which is why HolidayLens includes normalization and aliases.
-
----
-
-## `DATE_MISMATCH`
-
-The reference and library contain holidays with equivalent names but different dates.
-
-```text
-Reference:
-2026-05-28 — Bakri Id (Id-Uz-Zuha)
-
-Library:
-2026-05-27 — Bakri Id (Id-Uz-Zuha)
-
-Result:
-DATE_MISMATCH
-```
-
-Date mismatches are particularly important to investigate because movable holidays can change depending on official notifications, regional observance, or calendar calculations.
-
----
-
-# How matching works
-
-HolidayLens does not simply compare strings.
-
-The comparison process is approximately:
-
-```text
-Reference holiday
-       │
-       ▼
-Normalize name
-       │
-       ▼
-Apply aliases / canonical names
-       │
-       ▼
-Compare with library holidays
-       │
-       ├── same date + equivalent name
-       │        ↓
-       │      MATCH
-       │
-       ├── same date + different name
-       │        ↓
-       │   NAME_MISMATCH
-       │
-       ├── different date + equivalent name
-       │        ↓
-       │   DATE_MISMATCH
-       │
-       └── no corresponding holiday
-                ↓
-             MISSING
-```
-
-After reference records are processed, unused library records become `EXTRA`.
-
-This approach attempts to distinguish meaningful discrepancies from simple naming differences.
-
----
-
-# Coverage
-
-HolidayLens calculates:
-
-```text
-exact matches
-────────────── × 100
-reference holidays
-```
-
-For example:
-
-```text
-16 exact matches
-──────────────── × 100 = 66.7%
-24 reference holidays
-```
-
-Coverage represents **exact reference-to-library matches**.
-
-A high coverage percentage does not prove that a calendar is correct, and a lower percentage does not automatically prove that the library is incorrect.
-
-Coverage is an investigation metric.
-
----
-
-# Using a custom reference file
-
-The CLI allows a reference CSV to be specified directly.
-
-Example:
+Transforms a structured JSON audit report into a ready-to-submit GitHub issue markdown file formatted for `vacanza/python-holidays`.
 
 ```bash
-holidaylens audit \
-  --country IN \
-  --subdivision MH \
-  --year 2026 \
-  --reference ./my-reference.csv
+holidaylens report <REPORT_JSON> [--output <FILE.md>]
+# or
+holidaylens report --input <REPORT_JSON> [--output <FILE.md>]
 ```
 
-This is useful when:
+#### Options:
+* `<input>` or `--input`: Path to the input JSON report generated by `holidaylens audit --format json`.
+* `--output`: Path to save the markdown file. If omitted, prints markdown to stdout.
 
-* testing a new source
-* experimenting with a corrected dataset
-* validating a government notification
-* developing a new subdivision dataset
+#### Example:
+```bash
+holidaylens report reports/in_xnse_2026.json --output reports/issue_xnse.md
+```
 
-The custom reference file must follow the HolidayLens CSV format.
+#### Generated Markdown Preview:
+```markdown
+# [IN] Holiday data gaps for 2026 (subdivision=N/A, category=financial)
+
+## Summary
+
+| Metric | Value |
+|--------|-------|
+| Country | `IN` |
+| Subdivision | `N/A` |
+| Year | 2026 |
+| Category | financial |
+| Coverage | 76.5% |
+| Missing | 2 |
+| Extra | 0 |
+| Name Mismatch | 2 |
+| Date Mismatch | 0 |
+
+## Missing Holidays
+
+The following holidays appear in official government records but are absent from `python-holidays`:
+
+| Date | Name | Source |
+|------|------|--------|
+| 2026-08-15 | Independence Day | https://www.nseindia.com/regulations/listing-compliance/nse-market-timings-holidays |
+| 2026-11-08 | Diwali Laxmi Pujan (Muhurat Trading) | https://www.nseindia.com/regulations/listing-compliance/nse-market-timings-holidays |
+
+## Name Mismatches
+
+| Date | Official Name | Library Name |
+|------|--------------|--------------|
+| 2026-05-28 | Bakri Id | Bakri Id (estimated) |
+| 2026-06-26 | Muharram | Muharram (estimated) |
+
+## Reproduction
+
+```bash
+holidaylens audit --country IN --year 2026 --format json
+```
+
+Generated by [HolidayLens](https://github.com/vacanza/python-holidays)
+```
 
 ---
 
-# Python API
+### 5. `holidaylens list` – Registered Extractor Directory
 
-HolidayLens can also be used directly from Python.
+Displays all extractors currently registered in the engine:
 
-## Load reference data
+```bash
+holidaylens list
+```
+
+#### Output:
+```text
+Country    Category        Class
+--------------------------------------------------
+IN         bank            IndiaRBIExtractor
+IN         financial       IndiaNSEExtractor
+IN         government      IndiaGovExtractor
+JP         government      JapanCAOExtractor
+KR         government      SouthKoreaGovExtractor
+MY         government      MalaysiaGovExtractor
+PH         government      PhilippinesGovExtractor
+SG         government      SingaporeMOMExtractor
+TH         bank            ThailandGovExtractor
+TH         government      ThailandGovExtractor
+```
+
+---
+
+## Real-World Case Study: Diwali & Muhurat Trading on NSE
+
+One of the real-world motivating discoveries during HolidayLens v2 testing was the National Stock Exchange of India (XNSE) trading calendar behavior:
+
+### The Phenomenon
+On Diwali (Laxmi Pujan), stock exchanges in India remain closed for regular trading hours, but host a special **1-hour evening "Muhurat Trading" session**. Because exchanges observe Diwali as a holiday event, official trading circulars explicitly list Diwali (Laxmi Pujan) as a holiday.
+
+### The Discrepancy
+When Diwali falls on a weekend (Saturday or Sunday), the `holidays.financial_holidays('XNSE')` implementation drops the holiday entirely because it assumes markets are already closed on weekends. However:
+1. In 2026, Diwali falls on Sunday, November 8. The official NSE calendar lists Diwali (Laxmi Pujan), but `python-holidays` omitted it.
+2. In years like **2030, 2033, and 2036**, Diwali falls on weekends and is completely missing from `financial_holidays('XNSE')`.
+
+### Detection & Reproduction
+Running [`check.py`](file:///d:/MY/HolidayLens/check.py) scans XNSE across years:
+
+```bash
+python check.py
+```
+
+```text
+Scanning XNSE for Diwali (Laxmi Pujan) / Muhurat Trading from 2016 to 2036...
+
+[FOUND] 2024: 'Diwali Laxmi Pujan' is listed on 2024-11-01 (Friday)
+[FOUND] 2025: 'Diwali Laxmi Pujan' is listed on 2025-10-21 (Tuesday)
+[FOUND] 2026: 'Diwali Balipratipada' is listed on 2026-11-10 (Tuesday)
+[MISSING] 2030: Diwali / Muhurat Trading is entirely missing from XNSE.
+[MISSING] 2033: Diwali / Muhurat Trading is entirely missing from XNSE.
+[MISSING] 2036: Diwali / Muhurat Trading is entirely missing from XNSE.
+
+--- Diagnostic Summary ---
+Issue Verified: Diwali is missing in the following years: [2030, 2033, 2036]
+Conclusion: The framework consistently drops Diwali whenever it falls on a weekend, failing to implement the 1-hour Muhurat Trading exception.
+```
+
+HolidayLens v2 catches this automatically and packages the findings into a validated GitHub issue ready for upstream submission.
+
+---
+
+## Reference Data Layout & Schema
+
+### Directory Hierarchy
+
+Authoritative reference datasets are version-controlled in `data/official/`:
+
+```text
+data/official/
+├── ET/
+│   └── 2026.csv                    <-- Ethiopia national public holidays
+├── IN/
+│   ├── AS/2026.csv                 <-- India state subdivision (Assam)
+│   ├── MH/2026.csv                 <-- India state subdivision (Maharashtra)
+│   ├── MP/2026.csv                 <-- India state subdivision (Madhya Pradesh)
+│   ├── UK/2026.csv                 <-- India state subdivision (Uttarakhand)
+│   ├── bank/2026.csv               <-- India RBI banking schedule
+│   └── stock/2026.csv              <-- India NSE financial trading schedule
+├── JP/
+│   └── government/2026.csv         <-- Japan Cabinet Office (内閣府) holidays
+├── SG/
+│   └── government/2026.csv         <-- Singapore Ministry of Manpower holidays
+├── MY/
+│   └── government/2026.csv         <-- Malaysia Cabinet Division holidays
+├── PH/
+│   └── government/2026.csv         <-- Philippines Official Gazette holidays
+├── TH/
+│   └── government/2026.csv         <-- Thailand Bank of Thailand / Cabinet holidays
+└── KR/
+    └── government/2026.csv         <-- South Korea Ministry of Personnel Management
+```
+
+### CSV Schema
+
+Reference CSVs use UTF-8 encoding with a required header row:
+
+```csv
+date,name,category,source,authority,subdivision
+2026-01-26,Republic Day,public,https://mmrda.maharashtra.gov.in/en/public-holidays,Government of India,MH
+2026-11-08,Diwali Laxmi Pujan (Muhurat Trading),financial,https://www.nseindia.com,National Stock Exchange of India,
+```
+
+#### Fields:
+* **`date`** *(required)*: ISO 8601 date (`YYYY-MM-DD`).
+* **`name`** *(required)*: Official holiday name as specified in the gazette or circular.
+* **`category`** *(optional)*: `public`, `bank`, `financial`, or `government` (defaults to `public`).
+* **`source`** *(optional)*: The authoritative web URL or gazette reference.
+* **`authority`** *(optional)*: The issuing official institution.
+* **`subdivision`** *(optional)*: ISO 3166-2 state/province subdivision code (e.g. `MH`).
+
+---
+
+## Developer Guide
+
+### Creating a New Official Extractor
+
+To add an automated extractor for a new country or authority:
+
+1. Create a new module under `src/holidaylens/extractors/asia/` (or a new regional subpackage):
 
 ```python
+from pathlib import Path
+from holidaylens.extractors.base import BaseExtractor, ExtractionResult
+from holidaylens.extractors.registry import register
+from holidaylens.models import Holiday
 from holidaylens.sources import load_csv
 
-reference = load_csv("data/official/IN/MH/2026.csv")
+@register("TW", "government")
+class TaiwanGovExtractor(BaseExtractor):
+    """Extract official public holidays for Taiwan."""
+
+    country_code = "TW"
+    category = "government"
+    source_url = "https://www.dgpa.gov.tw"
+    authority_name = "Directorate-General of Personnel Administration"
+
+    def __init__(self, *, data_dir: str | Path = "data/official") -> None:
+        self.data_dir = Path(data_dir)
+
+    def extract(self, year: int) -> ExtractionResult:
+        result = ExtractionResult(metadata=self.build_metadata(year))
+        csv_path = self.data_dir / "TW" / "government" / f"{year}.csv"
+
+        if csv_path.exists():
+            result.holidays = load_csv(csv_path)
+        else:
+            result.warnings.append(f"No reference CSV found at {csv_path}")
+
+        return result
 ```
 
-## Load the `holidays` library data
+2. Export the new extractor module in [`src/holidaylens/extractors/asia/__init__.py`](file:///d:/MY/HolidayLens/src/holidaylens/extractors/asia/__init__.py).
+
+3. The `@register` decorator automatically binds it to the registry. It will immediately show up in `holidaylens list` and become available via `holidaylens extract --country TW --year 2026`.
+
+### Registering Linguistic Aliases
+
+When official notices use language variations, register them in [`src/holidaylens/aliases.py`](file:///d:/MY/HolidayLens/src/holidaylens/aliases.py):
 
 ```python
-from holidaylens.library import load_holidays
-
-dataset = load_holidays(
-    "IN",
-    subdiv="MH",
-    years=2026,
-)
-```
-
-## Compare datasets
-
-```python
-from holidaylens.compare import compare
-
-results = compare(reference, dataset)
-```
-
-## Generate a summary
-
-```python
-from holidaylens.report import summarize
-
-summary = summarize(results)
-
-print(summary)
-```
-
-Example:
-
-```python
-{
-    "matching": 16,
-    "missing": 5,
-    "extra": 2,
-    "name_mismatch": 2,
-    "date_mismatch": 1,
+_MY_COUNTRY_ALIASES: dict[str, str] = {
+    # Key: normalized official name -> Value: normalized canonical library name
+    "chao phraya day": "national memorial day",
 }
+
+ALIASES.update(_MY_COUNTRY_ALIASES)
 ```
-
-## Generate a human-readable report
-
-```python
-from holidaylens.report import format_report
-
-report = format_report(
-    results,
-    country="IN",
-    subdivision="MH",
-    year=2026,
-    reference_count=len(reference),
-    dataset_count=len(dataset),
-)
-
-print(report)
-```
-
-## Generate structured report data
-
-```python
-from holidaylens.report import report_data
-
-data = report_data(
-    results,
-    country="IN",
-    subdivision="MH",
-    year=2026,
-    reference_count=len(reference),
-    dataset_count=len(dataset),
-)
-```
-
-The returned object is JSON-serializable.
 
 ---
 
-# Exit codes
+## Recommended Contributor Workflow
 
-The CLI uses exit codes so it can eventually be used in automated workflows.
-
-## `0`
-
-The audit completed and all results were exact matches.
+If you are using HolidayLens to research and propose an improvement to the `python-holidays` library, follow this verified workflow:
 
 ```text
-MATCH only
+1. Find Authoritative Source (Gazette, Central Bank, Regulatory Circular)
+                           │
+                           ▼
+2. Create or Update Reference CSV in data/official/<COUNTRY>/...
+                           │
+                           ▼
+3. Run HolidayLens Audit:
+   holidaylens audit --country <CC> --year <YYYY> --format json --output report.json
+                           │
+                           ▼
+4. Generate GitHub Issue Markdown:
+   holidaylens report report.json --output issue.md
+                           │
+                           ▼
+5. Review the Generated Issue Template
+   Verify whether missing/mismatched holidays are true gaps vs out-of-scope observances
+                           │
+                           ▼
+6. Implement Minimal Upstream PR
+   Fork vacanza/python-holidays, add missing rule/dates, submit PR linking authoritative source
 ```
 
-## `1`
+---
 
-The audit completed successfully, but one or more discrepancies were found.
-
-For example:
+## Project Structure
 
 ```text
-MISSING
-EXTRA
-NAME_MISMATCH
-DATE_MISMATCH
-```
-
-This is useful for CI and automated auditing.
-
-## `2`
-
-The audit could not be performed because of an input or configuration problem.
-
-Examples include:
-
-* missing reference CSV
-* invalid CSV
-* invalid reference data
-* invalid arguments
-
----
-
-# Testing
-
-HolidayLens uses `pytest`.
-
-Run the complete test suite:
-
-```bash
-py -m pytest -q
-```
-
-The current development version has:
-
-```text
-53 tests passing
-```
-
-The test suite covers:
-
-* models
-* reference CSV loading
-* metadata handling
-* library loading
-* normalization
-* matching
-* aliases
-* comparison statuses
-* coverage
-* reports
-* provenance
-* CLI behavior
-* JSON output
-
----
-
-# Development
-
-Install development dependencies:
-
-```bash
-py -m pip install -e ".[dev]"
-```
-
-Run tests:
-
-```bash
-py -m pytest -q
-```
-
-Run Ruff:
-
-```bash
-ruff check .
+HolidayLens/
+├── data/
+│   └── official/                       # Authoritative reference datasets
+│       ├── ET/                         # Ethiopia
+│       ├── IN/                         # India (AS, MH, MP, UK, bank, stock)
+│       ├── JP/                         # Japan (Cabinet Office)
+│       ├── SG/                         # Singapore (Ministry of Manpower)
+│       ├── MY/                         # Malaysia (Cabinet Division)
+│       ├── PH/                         # Philippines (Official Gazette)
+│       ├── TH/                         # Thailand (Bank of Thailand / Cabinet)
+│       └── KR/                         # South Korea (Ministry of Personnel Management)
+│
+├── src/
+│   └── holidaylens/
+│       ├── __init__.py                 # Top-level package exports
+│       ├── aliases.py                  # Canonical name & regional transliteration dictionary
+│       ├── compare.py                  # Core comparison engine
+│       ├── library.py                  # Integration with python-holidays loaders
+│       ├── matching.py                 # Token overlap, fuzzy match, & alias resolution
+│       ├── models.py                   # Dataclasses: Holiday, SourceMetadata, AuditResult
+│       ├── normalization.py            # Accent stripping & string normalization pipeline
+│       ├── provenance.py               # SHA-256 file checksums & official source registries
+│       ├── report.py                   # Terminal format, JSON export, GitHub issue generator
+│       ├── sources.py                  # CSV parsing, writing, & path resolution
+│       ├── suite.py                    # Multi-country batch runner & aggregator
+│       ├── cli.py                      # Subcommand CLI: audit, suite, extract, report, list
+│       └── extractors/
+│           ├── __init__.py             # Extractor subsystem package
+│           ├── base.py                 # BaseExtractor & ExtractionResult dataclasses
+│           ├── registry.py             # Decorator-based registry & auto-discovery
+│           └── asia/                   # Asian region extractors (IN, JP, SG, MY, PH, TH, KR)
+│
+├── tests/                              # Comprehensive test suite (75 tests passing)
+│   ├── test_cli.py                     # Subcommand CLI tests
+│   ├── test_compare.py                 # Comparison engine tests
+│   ├── test_extractors.py              # Extractor & registry tests
+│   ├── test_library.py                 # holidays loader wrapper tests
+│   ├── test_matching.py                # Matching & alias tests
+│   ├── test_models.py                  # Dataclass initialization tests
+│   ├── test_provenance.py              # Checksum & source validation tests
+│   ├── test_report.py                  # Report formatting & issue template tests
+│   ├── test_sources.py                 # CSV loading & writing tests
+│   └── test_suite.py                   # Batch suite execution tests
+│
+├── check.py                            # Standalone Muhurat Trading diagnostic scanner
+├── pyproject.toml                      # Project metadata & build configuration
+├── README.md                           # Documentation
+└── LICENSE                             # MIT License
 ```
 
 ---
 
-# Example: Finding a real upstream issue
+## License & Acknowledgements
 
-One of the main purposes of HolidayLens is to help discover real issues in holiday libraries.
+HolidayLens is released under the **MIT License**. See the [`LICENSE`](LICENSE) file for complete details.
 
-For example, suppose an authoritative government source says:
-
-```text
-2026-03-03 — Holi
-```
-
-while the library produces:
-
-```text
-2026-03-03 — Holi
-2026-03-04 — Holi
-```
-
-HolidayLens can identify the additional library date:
-
-```text
-Extra Holidays
-────────────────────────────────
-2026-03-04 | Holi
-```
-
-The next step should **not** be to immediately modify the library.
-
-Instead:
-
-```text
-1. Detect discrepancy
-        ↓
-2. Inspect authoritative source
-        ↓
-3. Confirm the applicable state/subdivision
-        ↓
-4. Confirm the year
-        ↓
-5. Determine whether the reference dataset is complete
-        ↓
-6. Reproduce the library behavior
-        ↓
-7. Decide whether it is actually an upstream bug
-        ↓
-8. Add a regression test
-        ↓
-9. Fix the upstream implementation
-```
-
-This distinction is central to HolidayLens.
-
----
-
-# Relationship with `holidays`
-
-HolidayLens is designed to complement the [`holidays`](https://github.com/vacanza/python-holidays) project.
-
-The two projects have different purposes.
-
-### `holidays`
-
-Provides programmatic holiday calendars.
-
-For example:
-
-```python
-import holidays
-
-india = holidays.country_holidays(
-    "IN",
-    subdiv="MH",
-    years=2026,
-)
-```
-
-### HolidayLens
-
-Audits holiday data quality.
-
-It asks:
-
-```text
-Does the library output agree with an authoritative source?
-```
-
-HolidayLens therefore acts as a **verification and discovery layer** around the holiday library.
-
----
-
-# What HolidayLens is not
-
-HolidayLens is not intended to be:
-
-* a replacement for `holidays`
-* a consumer holiday-calendar website
-* a general-purpose calendar application
-* a source of truth by itself
-* an automatic bug-fixing system
-
-The authoritative source remains the basis for determining whether a discrepancy is valid.
-
----
-
-# Important limitations
-
-Holiday data can be complicated.
-
-A discrepancy does not necessarily mean that one dataset is wrong.
-
-Possible explanations include:
-
-* different definitions of a public holiday
-* regional observance
-* optional holidays
-* government notifications issued after a dataset was created
-* lunar-calendar calculations
-* substitute holidays
-* holidays that apply only to certain institutions
-* incomplete reference data
-* differences in holiday naming
-* changes to government notifications
-
-Therefore:
-
-> **HolidayLens findings should be treated as candidates for investigation, not automatic proof of an upstream bug.**
-
-Human verification against authoritative sources remains an important part of the workflow.
-
----
-
-# Recommended workflow for contributors
-
-If you want to use HolidayLens to investigate an issue in `holidays`, use this workflow:
-
-### 1. Find an authoritative source
-
-Prefer sources such as:
-
-* government holiday notifications
-* official government calendars
-* official gazettes
-* central/state government websites
-* other authoritative institutional sources
-
-Record the source URL in the reference CSV.
-
-### 2. Create the reference dataset
-
-For example:
-
-```text
-data/official/IN/MH/2026.csv
-```
-
-### 3. Run HolidayLens
-
-```bash
-holidaylens audit \
-  --country IN \
-  --subdivision MH \
-  --year 2026
-```
-
-### 4. Investigate discrepancies
-
-Look at:
-
-```text
-MISSING
-EXTRA
-NAME_MISMATCH
-DATE_MISMATCH
-```
-
-### 5. Verify the finding
-
-Check the authoritative source manually.
-
-Make sure the discrepancy is not caused by:
-
-* an incomplete reference dataset
-* an alias issue
-* a different holiday category
-* a regional rule
-* an intentional library behavior
-
-### 6. Reproduce the library behavior
-
-Confirm the result independently using the `holidays` package.
-
-### 7. Fix the upstream project
-
-If the discrepancy is a genuine issue, prepare an upstream change with:
-
-* a clear explanation
-* authoritative source
-* regression test
-* minimal code change
-
-### 8. Record the finding
-
-Keep the reference dataset and HolidayLens result so the discovery is reproducible.
-
----
-
-# Design philosophy
-
-HolidayLens follows a few principles.
-
-## Evidence first
-
-A discrepancy should be backed by an authoritative source whenever possible.
-
-## Reproducibility
-
-Another contributor should be able to run the same audit and reproduce the finding.
-
-## Small scope
-
-HolidayLens should remain focused on holiday-data verification rather than becoming a large holiday platform.
-
-## Human verification
-
-Automation should help contributors discover problems, not blindly change holiday data.
-
-## Upstream usefulness
-
-The ultimate value of a finding is whether it can help improve the upstream holiday library.
-
----
-
-# Roadmap
-
-Possible future improvements include:
-
-* Better reference-data path/configuration handling
-* Additional official datasets
-* More robust source management
-* Additional CLI commands
-* Stable JSON schema
-* CI integration
-* Automated audit reports
-* Better issue/finding generation
-* More sophisticated duplicate detection
-* More regional/subdivision coverage
-* Historical-year comparison
-* Additional authoritative source adapters
-
-These features will be added only when they improve the core goal of finding and verifying real holiday-data issues.
-
----
-
-# Contributing
-
-Contributions are welcome.
-
-A useful contribution can be:
-
-* adding an authoritative reference dataset
-* improving matching logic
-* adding tests
-* improving documentation
-* fixing a false positive
-* identifying a genuine holiday-data discrepancy
-* improving CLI behavior
-* improving provenance handling
-
-Before adding a new rule or dataset, consider whether it improves HolidayLens's ability to identify **real, actionable holiday-data issues**.
-
----
-
-# License
-
-HolidayLens is released under the license included in this repository.
-
-See [`LICENSE`](LICENSE) for details.
-
----
-
-# Acknowledgements
-
-HolidayLens is designed to support and complement the open-source [`holidays`](https://github.com/vacanza/python-holidays) project.
-
-The project is motivated by improving the reliability and coverage of programmatic holiday calendars through comparison with authoritative sources.
-
----
-
-# Current example
-
-A simple audit can be run with:
-
-```bash
-holidaylens audit \
-  --country IN \
-  --subdivision MH \
-  --year 2026
-```
-
-For machine-readable output:
-
-```bash
-holidaylens audit \
-  --country IN \
-  --subdivision MH \
-  --year 2026 \
-  --format json
-```
-
-The goal is simple:
-
-```text
-Authoritative holiday data
-            ↓
-        HolidayLens
-            ↓
-Potential discrepancies
-            ↓
-       Verification
-            ↓
-   Better holiday data
-```
-
-**HolidayLens helps contributors look at holiday data with a lens for accuracy, coverage, and evidence.**
+HolidayLens is built to support and complement the open-source [**`vacanza/python-holidays`**](https://github.com/vacanza/python-holidays) project. We express immense gratitude to the maintainers and contributors of `python-holidays` for establishing the standard for open-source holiday calculation.
